@@ -69,6 +69,14 @@ def main():
                                 1
                             )
 
+                            cv2.circle(
+                                img,
+                                (x, y),
+                                5,
+                                (0, 255, 0),
+                                -1
+                            )
+                            
                 cv2.imshow("Image", img)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
