@@ -38,6 +38,7 @@ def main():
                     break
 
                 img = cv2.flip(img, 1) #flipper billedet så det er ligesom et spejl
+                h, w, _ = img.shape
                 rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 results = hands.process(rgb)
 
@@ -47,6 +48,26 @@ def main():
                             img,
                             hand_landmarks, mp_hands.HAND_CONNECTIONS
                         )
+
+                        finger_tips = {
+                            "Thumb": hand_landmarks.landmark[4],
+                            "Index": hand_landmarks.landmark[8],
+                            "Middle": hand_landmarks.landmark[12],
+                            "Ring": hand_landmarks.landmark[16],
+                            "Pinky": hand_landmarks.landmark[20]
+                        }
+
+                        for name, landmark in finger_tips.items():
+                            x, y = int(landmark.x * w), int(landmark.y * h)
+                            cv2.putText(
+                                img,
+                                name,
+                                (x, y - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.5,
+                                (255, 255, 255),
+                                1
+                            )
 
                 cv2.imshow("Image", img)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
