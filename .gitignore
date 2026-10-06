@@ -10,4 +10,4 @@ __pycache__/
 data/rps_data_sample/
 data/rps_data_sample.zip
 models/*_gesture_recognizer/
-models/*
+models/
