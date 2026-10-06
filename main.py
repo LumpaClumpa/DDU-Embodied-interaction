@@ -1,22 +1,28 @@
-import mediapipe as mp
-import cv2
 import time
+from pathlib import Path
 
-mp_hands = mp.solutions.hands
-mp_draw = mp.solutions.drawing_utils
+import cv2
+import mediapipe as mp
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
+
+MODEL_PATH = Path(__file__).parent / "models" / "hand_landmarker.task"
 
 cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 cap.set(3, 640) #bredde
 cap.set(4, 480) #højde
 
 def main():
-    with mp_hands.Hands(
-        max_num_hands=2, #mængden af hænder der kan detekteres
-        min_detection_confidence=0.7, 
-        min_tracking_confidence=0.7
-    ) as hands:
-    
+    options = vision.HandLandmarkerOptions(
+        base_options=python.BaseOptions(model_asset_path=str(MODEL_PATH)),
+        running_mode=vision.RunningMode.VIDEO,
+        num_hands=2,
+        min_hand_detection_confidence=0.7,
+        min_hand_presence_confidence=0.7,
+        min_tracking_confidence=0.7,
+    )
 
+    with vision.HandLandmarker.create_from_options(options) as landmarker:
         if not cap.isOpened():
             print("Failed to open camera")
             return
@@ -24,6 +30,7 @@ def main():
         try:
             cv2.namedWindow("Image", cv2.WINDOW_NORMAL)
             cv2.resizeWindow("Image", 480, 360)
+            last_timestamp_ms = -1
 
             while True:
                 success, img = cap.read()
@@ -40,21 +47,25 @@ def main():
                 img = cv2.flip(img, 1) #flipper billedet så det er ligesom et spejl
                 h, w, _ = img.shape
                 rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                results = hands.process(rgb)
+                mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+                timestamp_ms = max(time.monotonic_ns() // 1_000_000, last_timestamp_ms + 1)
+                last_timestamp_ms = timestamp_ms
+                results = landmarker.detect_for_video(mp_image, timestamp_ms)
 
-                if results.multi_hand_landmarks:
-                    for hand_landmarks in results.multi_hand_landmarks:
-                        mp_draw.draw_landmarks(
+                if results.hand_landmarks:
+                    for hand_landmarks in results.hand_landmarks:
+                        vision.drawing_utils.draw_landmarks(
                             img,
-                            hand_landmarks, mp_hands.HAND_CONNECTIONS
+                            hand_landmarks,
+                            vision.HandLandmarksConnections.HAND_CONNECTIONS,
                         )
 
                         finger_tips = {
-                            "Thumb": hand_landmarks.landmark[4],
-                            "Index": hand_landmarks.landmark[8],
-                            "Middle": hand_landmarks.landmark[12],
-                            "Ring": hand_landmarks.landmark[16],
-                            "Pinky": hand_landmarks.landmark[20]
+                            "Thumb": hand_landmarks[4],
+                            "Index": hand_landmarks[8],
+                            "Middle": hand_landmarks[12],
+                            "Ring": hand_landmarks[16],
+                            "Pinky": hand_landmarks[20]
                         }
 
                         for name, landmark in finger_tips.items():
