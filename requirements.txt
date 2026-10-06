@@ -1,1 +1,22 @@
-mediapipe==1.0.1
+# Tested with Windows and Python 3.10.
+# Bootstrap legacy PyYAML before installing this file:
+#   python -m pip install "Cython<3" "setuptools<81" wheel
+#   python -m pip install --no-build-isolation "PyYAML==5.4.1"
+# Then install the runtime pins:
+#   python -m pip install -r requirements.txt
+# Finally, MediaPipe 0.10.5 needs this Protobuf runtime:
+#   python -m pip install --no-deps "protobuf==3.20.3"
+# TensorFlow 2.10.1's metadata rejects Protobuf 3.20.3, although the
+# Model Maker / MediaPipe imports and this project's script work with it.
+mediapipe-model-maker==0.1.0
+tensorflow==2.10.1
+tf-models-official==2.10.1
+tensorflow-text==2.10.0
+tensorflow-addons==0.18.0
+mediapipe==0.10.5
+numpy==1.23.5
+tensorflow-datasets==4.8.3
+matplotlib==3.10.9
+opencv-contrib-python==4.11.0.86
+tensorflow-hub==0.16.1
+setuptools<81

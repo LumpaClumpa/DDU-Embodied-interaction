@@ -1,0 +1,2 @@
+.\.venv-mediapipe\Scripts\Activate.ps1
+python test_training_models.py --dataset data\gesture_dataset --epochs 20

@@ -1,6 +1,12 @@
 # Virtual environment
 .venv/
+.venv-mediapipe/
 
 # Python cache
 __pycache__/
 *.pyc
+
+# Generated gesture training artifacts
+data/rps_data_sample/
+data/rps_data_sample.zip
+models/*_gesture_recognizer/
