@@ -1,2 +1,110 @@
-.\.venv-mediapipe\Scripts\Activate.ps1
-python test_training_models.py --dataset data\gesture_dataset --epochs 20
+DDU Embodied Interaction - installation and run guide
+=====================================================
+
+Prerequisites
+-------------
+
+- Windows 10 or 11
+- Python 3.10 (the pinned TensorFlow and MediaPipe Model Maker dependencies
+  were tested with Python 3.10)
+- A webcam for the live hand-landmark demo
+
+Open PowerShell in the repository folder before running the commands below.
+
+Create and install the environment
+----------------------------------
+
+Create a virtual environment using Python 3.10:
+
+    py -3.10 -m venv .venv
+    .\.venv\Scripts\Activate.ps1
+
+If PowerShell blocks activation, either allow it for this PowerShell process:
+
+    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+    .\.venv\Scripts\Activate.ps1
+
+Then install the dependencies in this order. The PyYAML bootstrap is needed
+because the pinned PyYAML release uses a legacy source build:
+
+    python -m pip install --upgrade pip
+    python -m pip install "Cython<3" "setuptools<81" wheel
+    python -m pip install --no-build-isolation "PyYAML==5.4.1"
+    python -m pip install -r requirements.txt
+    python -m pip install --no-deps "protobuf==3.20.3"
+
+The final Protobuf pin is required by MediaPipe 0.10.5. TensorFlow 2.10.1's
+package metadata rejects Protobuf 3.20.3, so it must be installed after the
+requirements file and without dependency resolution.
+
+Libraries
+---------
+
+The versions below are pinned in requirements.txt:
+
+- mediapipe 0.10.5: hand landmark detection and MediaPipe Tasks APIs.
+- opencv-contrib-python 4.11.0.86: webcam capture, image handling, and display.
+- mediapipe-model-maker 0.1.0: training a custom gesture recognizer.
+- tensorflow 2.10.1, tensorflow-text 2.10.0, tensorflow-addons 0.18.0,
+  tf-models-official 2.10.1, tensorflow-datasets 4.8.3, and tensorflow-hub
+  0.16.1: the TensorFlow and model-training dependencies used by Model Maker.
+- numpy 1.23.5: numerical arrays used by the vision and ML libraries.
+- matplotlib 3.10.9: plotting support used by the ML dependencies.
+- setuptools<81: packaging compatibility for the pinned dependencies.
+
+The installation commands also install build tools Cython<3 and wheel, PyYAML
+5.4.1, and the Protobuf 3.20.3 runtime as described above.
+
+Run the live webcam demo
+------------------------
+
+From the repository folder, with the virtual environment active, run:
+
+    python main.py
+
+The script opens camera 0 through Windows DirectShow and displays hand
+landmarks and fingertip names. Press q in the camera window to quit. The
+bundled hand-landmarker model must be present at
+models\hand_landmarker.task.
+
+Train a gesture-recognition model
+---------------------------------
+
+To train using your own images, arrange them in one subfolder per label. The
+dataset must include a "none" folder for images that do not belong to one of
+the custom gestures:
+
+    data\gesture_dataset\
+        none\
+        thumbs_up\
+        peace\
+
+Put supported image files (.bmp, .jpeg, .jpg, .png, or .webp) in each label
+folder, then run:
+
+    python training_models.py --dataset data\gesture_dataset --epochs 20
+
+At least two labels, including "none", are required, and at least 10 images
+with detected hands must remain after preprocessing. The script splits the
+images into training, validation, and test sets and writes the trained model
+under models\gesture_dataset_gesture_recognizer\ by default. To choose a
+different output directory, add, for example:
+
+    --export-dir models\my_gesture_model
+
+The example Rock-Paper-Scissors dataset can be downloaded and trained
+automatically (an internet connection is needed the first time):
+
+    python training_models.py --sample-data --epochs 20
+
+The trained gesture-recognizer model is separate from the hand-landmarker
+model used by main.py; main.py currently does not load the newly trained model.
+
+Troubleshooting
+---------------
+
+- If the camera does not open, check that it is connected and not being used
+  by another application. The script currently selects camera index 0.
+- If a package installation fails, check that the active interpreter is
+  Python 3.10 and repeat the installation commands in the stated order.
+- To leave the virtual environment, run: deactivate
