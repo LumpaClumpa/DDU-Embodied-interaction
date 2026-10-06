@@ -63,9 +63,11 @@ From the repository folder, with the virtual environment active, run:
     python main.py
 
 The script opens camera 0 through Windows DirectShow and displays hand
-landmarks and fingertip names. Press q in the camera window to quit. The
-bundled hand-landmarker model must be present at
-models\hand_landmarker.task.
+landmarks, fingertip names, and the predicted gesture with its confidence.
+Press q in the camera window to quit. The gesture-recognizer model must be
+present at models\gesture_recognizer.task. Put a downloaded MediaPipe gesture
+recognizer task file there, or copy a trained model into that location.
+main.py delegates the webcam and recognition work to gesture_camera.py.
 
 Train a gesture-recognition model
 ---------------------------------
@@ -98,7 +100,9 @@ automatically (an internet connection is needed the first time):
     python training_models.py --sample-data --epochs 20
 
 The trained gesture-recognizer model is separate from the hand-landmarker
-model used by main.py; main.py currently does not load the newly trained model.
+model. To run a trained model in main.py, copy its
+gesture_recognizer.task to models\gesture_recognizer.task, replacing the
+downloaded model.
 
 Troubleshooting
 ---------------
