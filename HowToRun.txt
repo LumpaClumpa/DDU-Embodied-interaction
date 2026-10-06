@@ -94,6 +94,15 @@ different output directory, add, for example:
 
     --export-dir models\my_gesture_model
 
+To add a gesture class to a model you've already trained, keep the existing
+class folders and images in the dataset, add a folder for the new class, and
+rerun training with the same --export-dir (if you used one). The script detects
+the added class and retrains the classifier using images from all current
+classes; it does not train only on the new class. The new model is trained in a
+temporary directory and replaces the old export only after training succeeds.
+Removing or renaming existing classes still requires choosing a new
+--export-dir manually.
+
 The example Rock-Paper-Scissors dataset can be downloaded and trained
 automatically (an internet connection is needed the first time):
 

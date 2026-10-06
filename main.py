@@ -7,3 +7,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+#kig gerne i HowToRun.txt for at se hvordan du kan køre programmet.
