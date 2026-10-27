@@ -1,6 +1,7 @@
 # Virtual environment
 .venv/
 .venv-mediapipe/
+.venv-old-py310
 
 # Python cache
 __pycache__/

@@ -165,10 +165,11 @@ def text_size(text, size=18, bold=False):
 
 
 def draw_text(img, text, org, size=18, color=(0, 0, 0), bold=False,
-              background=None, padding=5):
+              background=None, padding=5, outline=None, outline_width=2):
     """Draw text with its top-left corner at org.
 
-    Colors are BGR. With background, a filled box is drawn behind the text.
+    Colors are BGR. With background, a filled box is drawn behind the text;
+    with outline, each letter gets a border of that color instead.
     Only the small area around the text is converted for Pillow, so this is
     cheap enough to call several times per frame.
     """
@@ -185,7 +186,11 @@ def draw_text(img, text, org, size=18, color=(0, 0, 0), bold=False,
     if background is not None:
         cv2.rectangle(img, (x0, y0), (x1 - 1, y1 - 1), background, -1)
     patch = Image.fromarray(np.ascontiguousarray(img[y0:y1, x0:x1, ::-1]))
-    ImageDraw.Draw(patch).text((x - x0, y - y0), text, font=font, fill=tuple(color[::-1]))
+    stroke = {}
+    if outline is not None:
+        stroke = {"stroke_width": outline_width, "stroke_fill": tuple(outline[::-1])}
+    ImageDraw.Draw(patch).text((x - x0, y - y0), text, font=font,
+                               fill=tuple(color[::-1]), **stroke)
     img[y0:y1, x0:x1] = np.asarray(patch)[:, :, ::-1]
 
 

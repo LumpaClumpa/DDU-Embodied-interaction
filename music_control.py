@@ -90,7 +90,8 @@ FRAME_MIN_SIZE = 0.15   # Frames narrower or lower than this (share of the
 VISUALIZER_BANDS = 32
 TEXT_COLOR = (0, 0, 0)          # Black text...
 PANEL_COLOR = (245, 245, 245)   # ...on light panels, so it reads on any video.
-BAR_COLOR = (60, 60, 60)
+BAR_COLOR = (0, 0, 0)
+OUTLINE_COLOR = (255, 255, 255)  # Border on the visualizer text and bars.
 ROCK_BAR_COLORS = ((0, 60, 230), (0, 200, 255))  # Red to yellow (BGR).
 
 VK_VOLUME_MUTE = 0xAD
@@ -548,43 +549,51 @@ class MusicController:
         x0, y0 = int(rect[0] * w), int(rect[1] * h)
         x1, y1 = int(rect[2] * w), int(rect[3] * h)
         pad = 10
+        cx = (x0 + x1) // 2
 
-        overlay = img.copy()
-        cv2.rectangle(overlay, (x0, y0), (x1, y1), PANEL_COLOR, -1)
-        cv2.addWeighted(overlay, 0.8, img, 0.2, 0, img)
-
-        # Now playing: cover art on the left, title and artist beside it.
+        # Now playing, stacked and centred above the bars: cover art, then
+        # title, then artist.
         bars_top = y0 + pad
         info = self.now_playing
         if info is not None and info.available:
-            art = min(80, (y1 - y0) // 2, (x1 - x0) // 3)
-            text_x = x0 + pad
+            y = y0 + pad
+            art = min(80, (y1 - y0) // 3, x1 - x0 - 2 * pad)
             if info.cover is not None and art >= 24:
                 cover = cv2.resize(info.cover, (art, art), interpolation=cv2.INTER_AREA)
-                img[y0 + pad:y0 + pad + art, x0 + pad:x0 + pad + art] = cover
-                text_x += art + pad
-            max_chars = max(4, (x1 - text_x - pad) // 9)
-            draw_text(img, shorten(info.title, max_chars), (text_x, y0 + pad + 2), 16,
-                      TEXT_COLOR, bold=True)
-            draw_text(img, shorten(info.artist, max_chars + 4), (text_x, y0 + pad + 24), 13,
-                      TEXT_COLOR)
-            bars_top = y0 + pad + max(art, 44) + pad
+                img[y:y + art, cx - art // 2:cx - art // 2 + art] = cover
+                y += art + pad
+            max_chars = max(4, (x1 - x0 - 2 * pad) // 9)
+            for text, size, bold in ((shorten(info.title, max_chars), 16, True),
+                                     (shorten(info.artist, max_chars + 4), 13, False)):
+                if not text:
+                    continue
+                text_w, text_h = text_size(text, size, bold)
+                draw_text(img, text, (cx - text_w // 2, y), size, TEXT_COLOR, bold=bold,
+                          outline=OUTLINE_COLOR, outline_width=1)
+                y += text_h + 8
+            bars_top = y + pad
 
-        # Spectrum bars along the bottom of the frame.
+        # Spectrum bars mirrored around a horizontal centre line.
         if self.audio is None or not self.audio.available:
             message = self.audio.error if self.audio is not None else "audio: off"
-            draw_text(img, message, (x0 + pad, y1 - pad - 16), 13, TEXT_COLOR)
+            message_w, _ = text_size(message, 13)
+            draw_text(img, message, (cx - message_w // 2, y1 - pad - 16), 13, TEXT_COLOR,
+                      background=PANEL_COLOR, padding=3)
             return
         levels = self.audio.levels()
         area_w, area_h = x1 - x0 - 2 * pad, y1 - pad - bars_top
         if area_w < len(levels) or area_h < 8:
             return
         bar_w = area_w / len(levels)
+        mid = bars_top + area_h // 2
         for i, level in enumerate(levels):
-            bar_h = max(2, int(level * area_h))
+            half_h = max(1, int(level * area_h / 2))
             bx0 = int(x0 + pad + i * bar_w)
             bx1 = int(x0 + pad + (i + 1) * bar_w) - 2
-            cv2.rectangle(img, (bx0, y1 - pad - bar_h), (bx1, y1 - pad),
+            # White border first, then the fill inset by one pixel.
+            cv2.rectangle(img, (bx0 - 1, mid - half_h - 1), (bx1 + 1, mid + half_h + 1),
+                          OUTLINE_COLOR, -1)
+            cv2.rectangle(img, (bx0, mid - half_h), (bx1, mid + half_h),
                           self.bar_color(i / len(levels)), -1)
 
     def bar_color(self, position):
