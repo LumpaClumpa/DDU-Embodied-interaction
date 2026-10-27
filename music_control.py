@@ -17,8 +17,6 @@ Gestures from the trained model add more commands once they are trained
     Hold palm_stop                 -> pause
     Hold point_right / point_left  -> next / previous track
     Hold thumb_down                -> mute / unmute
-    Hold rock_horns                -> rock mode colours on / off
-    Hold shaka                     -> shuffle jump (skip 2-5 tracks)
 
 Commands are sent as Windows media keys, so they control whatever player is
 active (Spotify, YouTube in a browser, Windows Media Player, ...). The only
@@ -50,7 +48,7 @@ from gesture_camera import (
 from media_sources import AudioSpectrum, NowPlaying
 
 
-HOLD_SECONDS = 0.2      # How long a gesture must be held before it triggers.
+HOLD_SECONDS = 0.1      # How long a gesture must be held before it triggers.
 MIN_SCORE = 0.4         # Ignore uncertain model predictions.
 
 # Labels (lowercase dataset folder names) of trained gestures this iteration
