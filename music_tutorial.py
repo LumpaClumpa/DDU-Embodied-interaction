@@ -145,6 +145,7 @@ class TutorialController(MusicController):
 class Tutorial:
     def __init__(self, controller, start_level=0):
         self.controller = controller
+        self.issue_seen = 0.0  # swipe_issue_time of the last explained swipe.
         self.start_level(min(max(start_level, 0), len(LEVELS) - 1))
 
     # ---- Level state -----------------------------------------------------
@@ -207,8 +208,27 @@ class Tutorial:
             self.update_action(level, events, now)
         elif level["kind"] == "challenge":
             self.update_challenge(events, now)
+        self.explain_swipe(level, events, now)
 
         self.draw(img, now)
+
+    def explain_swipe(self, level, events, now):
+        """When a swipe is the move asked for and an attempt did not count,
+        say why (too slow, diagonal, ...)."""
+        issue_time = self.controller.swipe_issue_time
+        if issue_time <= self.issue_seen:
+            return
+        self.issue_seen = issue_time
+        if self.done_time is not None or events:
+            return
+        if level["kind"] == "action":
+            wanted = level["goal"]
+        elif level["kind"] == "challenge" and self.challenge_time is None:
+            wanted = self.prompts[self.prompt_index]
+        else:
+            return
+        if wanted in ("NEXT", "PREVIOUS"):
+            self.say(f"Almost! {self.controller.swipe_issue}", now)
 
     def complete(self, now):
         self.done_time = now

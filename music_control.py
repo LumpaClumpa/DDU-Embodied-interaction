@@ -65,9 +65,16 @@ SWIPE_WINDOW = 0.40        # ...within this many seconds.
 SWIPE_MIN_SPEED = 0.8      # Frame widths per second while swiping.
 SWIPE_STRAIGHTNESS = 2.0   # Sideways travel must be this many times the vertical.
 SWIPE_SMOOTHNESS = 1.3     # Path length may be at most this times the net travel.
-SWIPE_MIN_FRAMES = 4       # A swipe spans at least this many frames...
-SWIPE_MAX_STEP_SHARE = 0.5 # ...and no single frame may cover more than this
+SWIPE_MIN_FRAMES = 3       # A swipe spans at least this many frames...
+SWIPE_MAX_STEP_SHARE = 0.6 # ...and no single frame may cover more than this
                            # share of it, so a tracking glitch is not a swipe.
+SWIPE_GRACE = 0.2          # A swipe survives this long while motion blur makes
+                           # the fingers look curled or the hand drops out.
+SWIPE_EDGE = 0.08          # A hand that leaves the image this close to the edge...
+SWIPE_EDGE_SHARE = 0.7     # ...completes a fast swipe that covered this share
+                           # of SWIPE_DISTANCE.
+SWIPE_ATTEMPT_SHARE = 0.6  # Movement this large counts as a swipe attempt, so a
+                           # failed one can be explained (swipe_issue).
 SWIPE_SETTLE = 0.3        # Seconds an open hand must be visible before swiping.
 SWIPE_COOLDOWN = 0.6       # Minimum time between two swipes.
 SWIPE_RETURN_BLOCK = 0.9   # Opposite direction is ignored this long (return stroke).
@@ -176,6 +183,14 @@ class MusicController:
         self.last_swipe_dir = 0
         self.swipe_meter = 0.0      # -1..1, share of SWIPE_DISTANCE travelled.
         self.swipe_ready = False    # True when the current move would count.
+        self.swipe_best = (0.0, False)  # (travel, fast) of the best segment so far.
+        self.not_open_since = None  # When the fingers last stopped looking open.
+        self.lost_since = None      # When the hand disappeared.
+        self.settle_x = 0.0         # Palm position when the open hand appeared.
+        # Why the last swipe attempt did not count, for the tutorial.
+        self.attempt_reason = ""
+        self.swipe_issue = ""
+        self.swipe_issue_time = 0.0
 
         self.pinch_anchor_y = None
 
@@ -200,11 +215,14 @@ class MusicController:
 
         hands = results.hand_landmarks
         framing = self.update_frame(hands, now)
-        if framing or len(hands) != 1:
+        if not hands and not framing:
+            self.on_hand_lost(now)
+        elif framing or len(hands) != 1:
             # No controls while framing, or while two hands make it unclear
             # which one is in charge.
             self.reset_controls()
         else:
+            self.lost_since = None
             self.update_controls(hands[0], results, now)
 
         self.draw(img, now, show_meter=len(hands) == 1 and not framing)
@@ -214,6 +232,29 @@ class MusicController:
         self.hand_since = None
         self.pinch_anchor_y = None
         self.hold_gesture = ""
+
+    def on_hand_lost(self, now):
+        """A fast swipe can blur the hand out of detection for a frame, or
+        carry it out of the image. Keep the swipe alive for SWIPE_GRACE, and
+        complete it if the hand left at the edge it was moving toward."""
+        self.pinch_anchor_y = None
+        self.hold_gesture = ""
+        if self.lost_since is None:
+            self.lost_since = now
+            self.check_edge_exit(now)
+        if now - self.lost_since > SWIPE_GRACE:
+            self.reset_controls()
+
+    def check_edge_exit(self, now):
+        if not self.swipe_history:
+            return
+        last_x = self.swipe_history[-1][1]
+        travel, fast = self.swipe_best
+        direction = 1 if travel > 0 else -1
+        at_edge = last_x > 1 - SWIPE_EDGE if direction > 0 else last_x < SWIPE_EDGE
+        if (at_edge and fast and abs(travel) >= SWIPE_EDGE_SHARE * SWIPE_DISTANCE
+                and not self.swipe_blocked(direction, now)):
+            self.fire_swipe(direction, now)
 
     def update_controls(self, hand, results, now):
         wrist, thumb_tip, index_tip = hand[0], hand[4], hand[8]
@@ -317,25 +358,63 @@ class MusicController:
             self.trigger(f"SHUFFLE +{skips}", VK_MEDIA_NEXT_TRACK, now, presses=skips)
 
     def reset_swipe(self):
+        if self.attempt_reason:
+            # The attempt ended without a swipe: publish why.
+            self.note_issue(self.attempt_reason, time.monotonic())
+            self.attempt_reason = ""
         self.swipe_history.clear()
         self.swipe_meter = 0.0
         self.swipe_ready = False
+        self.swipe_best = (0.0, False)
+
+    def note_issue(self, text, now):
+        self.swipe_issue, self.swipe_issue_time = text, now
+
+    def swipe_blocked(self, direction, now):
+        since_last = now - self.last_swipe
+        return since_last < SWIPE_COOLDOWN or (
+            direction == -self.last_swipe_dir and since_last < SWIPE_RETURN_BLOCK
+        )
+
+    def fire_swipe(self, direction, now):
+        self.last_swipe = now
+        self.last_swipe_dir = direction
+        self.attempt_reason = ""
+        self.swipe_history.clear()
+        self.swipe_best = (0.0, False)
+        if direction > 0:
+            self.trigger("NEXT", VK_MEDIA_NEXT_TRACK, now)
+        else:
+            self.trigger("PREVIOUS", VK_MEDIA_PREV_TRACK, now)
 
     def update_swipe(self, hand, now):
-        # Only an open hand (at least 3 fingers out) can swipe, and only after
-        # it has been visible for a moment, so moving a relaxed hand around or
-        # bringing it into view does not count.
-        if extended_fingers(hand) < 3:
-            self.reset_swipe()
-            self.hand_since = None
-            return
+        palm = hand[9]  # Middle-finger knuckle: steadier than the fingertips.
+
+        # Only an open hand (at least 3 fingers out) can swipe. Motion blur can
+        # make the fingers look curled for a frame or two, so a swipe in
+        # progress survives that for SWIPE_GRACE.
+        if extended_fingers(hand) >= 3:
+            self.not_open_since = None
+        else:
+            if self.not_open_since is None:
+                self.not_open_since = now
+            if now - self.not_open_since > SWIPE_GRACE or self.hand_since is None:
+                if self.swipe_history and abs(palm.x - self.swipe_history[-1][1]) > 0.04:
+                    self.note_issue("Open your hand to swipe.", now)
+                self.reset_swipe()
+                self.hand_since = None
+                return
+
+        # Wait until the open hand has been visible for a moment, so bringing
+        # it into view does not count as a swipe.
         if self.hand_since is None:
-            self.hand_since = now
+            self.hand_since, self.settle_x = now, palm.x
         if now - self.hand_since < SWIPE_SETTLE:
+            if abs(palm.x - self.settle_x) > 0.1:
+                self.note_issue("Hold your open hand still for a moment, then swipe.", now)
             self.reset_swipe()
             return
 
-        palm = hand[9]  # Middle-finger knuckle: steadier than the fingertips.
         self.swipe_history.append((now, palm.x, palm.y))
         while self.swipe_history and now - self.swipe_history[0][0] > SWIPE_WINDOW:
             self.swipe_history.popleft()
@@ -360,21 +439,40 @@ class MusicController:
                 best_dx, best_fast = dx, fast
 
         direction = 1 if best_dx > 0 else -1
-        since_last = now - self.last_swipe
-        blocked = since_last < SWIPE_COOLDOWN or (
-            direction == -self.last_swipe_dir and since_last < SWIPE_RETURN_BLOCK
-        )
+        blocked = self.swipe_blocked(direction, now)
+        self.swipe_best = (best_dx, best_fast)
         self.swipe_meter = max(-1.0, min(1.0, best_dx / SWIPE_DISTANCE))
         self.swipe_ready = best_fast and not blocked
 
         if self.swipe_ready and abs(best_dx) >= SWIPE_DISTANCE:
-            self.last_swipe = now
-            self.last_swipe_dir = direction
-            self.swipe_history.clear()
-            if direction > 0:
-                self.trigger("NEXT", VK_MEDIA_NEXT_TRACK, now)
+            self.fire_swipe(direction, now)
+            return
+        self.explain_attempt(points, palm, best_dx, best_fast, now)
+
+    def explain_attempt(self, points, palm, best_dx, best_fast, now):
+        """Remember why a clear sideways movement is not counting yet."""
+        raw_dx, raw_dy = palm.x - points[0][1], palm.y - points[0][2]
+        if abs(raw_dx) < SWIPE_ATTEMPT_SHARE * SWIPE_DISTANCE:
+            if self.attempt_reason:
+                self.note_issue(self.attempt_reason, now)
+                self.attempt_reason = ""
+            return
+        direction = 1 if raw_dx > 0 else -1
+        since_last = now - self.last_swipe
+        if direction == -self.last_swipe_dir and since_last < SWIPE_RETURN_BLOCK:
+            reason = "Bringing your hand back does not count. Pause, then swipe."
+        elif since_last < SWIPE_COOLDOWN:
+            reason = "Wait a moment between swipes."
+        elif abs(best_dx) < SWIPE_ATTEMPT_SHARE * SWIPE_DISTANCE:
+            if abs(raw_dx) < SWIPE_STRAIGHTNESS * abs(raw_dy):
+                reason = "Move straight sideways, not diagonally."
             else:
-                self.trigger("PREVIOUS", VK_MEDIA_PREV_TRACK, now)
+                reason = "Swipe in one smooth movement."
+        elif not best_fast:
+            reason = "Swipe a bit faster."
+        else:
+            reason = "Swipe a bit further."
+        self.attempt_reason = reason
 
     def update_volume(self, thumb_tip, index_tip, now):
         pinch_y = (thumb_tip.y + index_tip.y) / 2
