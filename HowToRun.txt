@@ -83,20 +83,55 @@ on. Edit the MESSAGES dictionary in trash_talk.py to change the lines.
 Iteration 2: music control with visuals
 ---------------------------------------
 
+The visualizer needs three extra packages in the camera environment: one
+captures the sound your speakers play, the others read the song title, artist
+and cover art from Windows. Install them once:
+
+    python -m pip install soundcard winrt-runtime winrt-Windows.Media.Control winrt-Windows.Storage.Streams winrt-Windows.Foundation winrt-Windows.Foundation.Collections
+
+Without them the controls still work; the visualizer then shows what is
+missing.
+
 Start music in any player (Spotify, a browser, ...), then run:
 
     python music_control.py
 
 - Hold a closed fist: play / pause
-- Swipe your hand quickly right / left: next / previous track
+- Swipe your open hand quickly right / left: next / previous track
+  The swipe must be fast, mostly sideways and in one smooth movement. Show
+  your open hand for a moment before swiping; bringing the hand back after a
+  swipe does not count. The bar at the top fills as you move and turns
+  green when the movement is good enough to count. The thresholds are the
+  SWIPE_* constants at the top of music_control.py.
 - Pinch thumb and index finger, then move up / down: volume up / down
+- Frame with both hands to open the visualizer: make an "L" with thumb and
+  index finger of each hand (like framing a photo), hold it briefly, and drag
+  the hands apart to size the frame. Relax your hands to place it there. Do
+  it again to move or resize it; a small frame (red corners) closes it. The
+  visualizer shows the song title, artist and cover art, and bars of the
+  sound that is playing.
 
-This iteration reads the hand landmarks directly (finger positions and hand
-movement), so it does not depend on the custom gesture classes. The commands
-are sent as Windows media keys. On screen you see a fingertip
-trail, a volume slider while pinching, an icon for each action, and
-decorative equalizer bars that react to your hand movement. Add --dry-run to
-see the actions without sending media keys.
+The controls only react while one hand is in view. These controls read the hand landmarks directly (finger positions and
+hand movement), so they work without any custom gesture classes.
+
+Trained gestures add more controls. Make a dataset folder with exactly these
+names, collect photos, and retrain; gestures the model does not know are
+ignored:
+
+    data\gesture_dataset\palm_stop\     open palm facing the camera: pause
+    data\gesture_dataset\point_right\   index finger pointing right: next track
+    data\gesture_dataset\point_left\    index finger pointing left: previous track
+    data\gesture_dataset\thumb_down\    thumbs down: mute / unmute
+    data\gesture_dataset\rock_horns\    index and pinky up: rock mode colours
+    data\gesture_dataset\shaka\         thumb and pinky out: shuffle jump
+
+"Right" and "left" mean as seen in the mirrored camera window. Take the
+pointing photos so that they match what the window shows; a phone's selfie
+photo is usually saved unmirrored, which swaps the two directions.
+
+The commands are sent as Windows media keys, and each one is printed in the
+console. On screen there is only the swipe meter, plus the visualizer while
+it is open. Add --dry-run to see the actions without sending media keys.
 
 Both iterations take --model to use another gesture_recognizer.task file,
 for example models\test_model\gesture_recognizer.task.
@@ -116,7 +151,13 @@ the custom gestures:
 Put supported image files (.bmp, .jpeg, .jpg, .png, or .webp) in each label
 folder, then run:
 
-    python training_models.py --dataset data\gesture_dataset --epochs 20
+    python training_models.py --dataset data\gesture_dataset
+
+The defaults (100 epochs, batch size 32, learning rate 0.002, dropout 0.4)
+were tuned on this dataset; change them with --epochs, --batch-size,
+--learning-rate and --dropout. Images stored sideways with EXIF rotation
+(typical for phone photos) are rotated upright in a temporary copy before
+training; the original files are not changed.
 
 At least two labels, including "none", are required, and at least 10 images
 with detected hands must remain after preprocessing. The script splits the
@@ -138,7 +179,7 @@ Removing or renaming existing classes still requires choosing a new
 The example Rock-Paper-Scissors dataset can be downloaded and trained
 automatically (an internet connection is needed the first time):
 
-    python training_models.py --sample-data --epochs 20
+    python training_models.py --sample-data
 
 The trained gesture-recognizer model is separate from the hand-landmarker
 model. To run a trained model in main.py, copy its

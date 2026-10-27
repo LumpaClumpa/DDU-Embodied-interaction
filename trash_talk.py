@@ -74,7 +74,7 @@ MESSAGES = {
 FALLBACK_MESSAGE = "{player} throws a '{gesture}'. Bold move."
 IGNORED_GESTURES = {"none", ""}
 
-MIN_SCORE = 0.6        # Ignore uncertain predictions.
+MIN_SCORE = 0.5        # Ignore uncertain predictions.
 HOLD_SECONDS = 0.6     # How long a gesture must be held before it triggers.
 COOLDOWN_SECONDS = 2.0 # Minimum time between two messages.
 BANNER_SECONDS = 4.0   # How long a message stays on screen.

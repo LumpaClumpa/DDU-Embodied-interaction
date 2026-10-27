@@ -11,6 +11,11 @@ Dataset layout:
 
 The ``none`` class is required and should contain hands making gestures outside
 the custom classes. Each image should clearly show a hand.
+
+Phone photos often store their rotation as EXIF metadata, which Model Maker
+ignores. Training therefore uses a temporary copy of the dataset in which
+every image is rotated upright, so the model sees hands the same way the
+camera does. The original images are not changed.
 """
 
 import argparse
@@ -23,6 +28,7 @@ import zipfile
 from pathlib import Path
 
 import tensorflow as tf # pyright: ignore[reportMissingModuleSource]
+from PIL import Image, ImageOps
 from mediapipe_model_maker import gesture_recognizer # pyright: ignore[reportMissingImports]
 from mediapipe_model_maker.python.core.data.classification_dataset import (
     ClassificationDataset,
@@ -34,6 +40,7 @@ SAMPLE_DATA_URL = (
     "rps_data_sample.zip"
 )
 IMAGE_SUFFIXES = {".bmp", ".jpeg", ".jpg", ".png", ".webp"}
+EXIF_ORIENTATION = 0x0112
 PROJECT_DIR = Path(__file__).resolve().parent
 
 
@@ -57,14 +64,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--epochs",
         type=int,
-        default=10,
-        help="Number of training epochs (default: 10).",
+        default=100,
+        help="Number of training epochs (default: 100).",
     )
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=2,
-        help="Training batch size (default: 2).",
+        default=32,
+        help="Training batch size (default: 32).",
+    )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=0.002,
+        help="Learning rate (default: 0.002).",
+    )
+    parser.add_argument(
+        "--dropout",
+        type=float,
+        default=0.4,
+        help="Dropout rate of the classifier (default: 0.4).",
     )
     parser.add_argument(
         "--sample-data",
@@ -76,6 +95,10 @@ def parse_args() -> argparse.Namespace:
         parser.error("--epochs must be at least 1")
     if args.batch_size < 1:
         parser.error("--batch-size must be at least 1")
+    if args.learning_rate <= 0:
+        parser.error("--learning-rate must be positive")
+    if not 0 <= args.dropout < 1:
+        parser.error("--dropout must be at least 0 and less than 1")
     return args
 
 
@@ -138,6 +161,32 @@ def validate_dataset(dataset_dir: Path) -> dict[str, int]:
             f"({', '.join(sorted(empty_labels))})."
         )
     return label_counts
+
+
+def copy_upright_dataset(dataset_dir: Path, target_dir: Path) -> int:
+    """Copy the dataset to target_dir with EXIF rotation applied.
+
+    Returns the number of images that had to be rotated.
+    """
+    rotated = 0
+    for folder in dataset_dir.iterdir():
+        if not folder.is_dir():
+            continue
+        (target_dir / folder.name).mkdir(parents=True)
+        for image_path in folder.iterdir():
+            if not image_path.is_file() or image_path.suffix.lower() not in IMAGE_SUFFIXES:
+                continue
+            target_path = target_dir / folder.name / image_path.name
+            with Image.open(image_path) as image:
+                if image.getexif().get(EXIF_ORIENTATION, 1) == 1:
+                    shutil.copy2(image_path, target_path)
+                    continue
+                upright = ImageOps.exif_transpose(image)
+                if upright.mode not in ("RGB", "L"):
+                    upright = upright.convert("RGB")
+                upright.save(target_path, quality=95)
+                rotated += 1
+    return rotated
 
 
 def has_added_classes(export_dir: Path, label_names: list[str]) -> bool:
@@ -210,13 +259,20 @@ def train_and_export(
     label_names: list[str],
     epochs: int,
     batch_size: int,
+    learning_rate: float,
+    dropout: float,
 ) -> Path:
     hparams = gesture_recognizer.HParams(
         export_dir=str(export_dir),
         epochs=epochs,
         batch_size=batch_size,
+        learning_rate=learning_rate,
+        shuffle=True,
     )
-    options = gesture_recognizer.GestureRecognizerOptions(hparams=hparams)
+    options = gesture_recognizer.GestureRecognizerOptions(
+        hparams=hparams,
+        model_options=gesture_recognizer.ModelOptions(dropout_rate=dropout),
+    )
     model = gesture_recognizer.GestureRecognizer.create(
         train_data=train_data,
         validation_data=validation_data,
@@ -248,19 +304,30 @@ def train_and_export(
     return export_dir / "gesture_recognizer.task"
 
 
-def train(dataset_dir: Path, export_dir: Path, epochs: int, batch_size: int) -> Path:
+def train(
+    dataset_dir: Path,
+    export_dir: Path,
+    epochs: int,
+    batch_size: int,
+    learning_rate: float,
+    dropout: float,
+) -> Path:
     label_counts = validate_dataset(dataset_dir)
     print("Images per label:")
     for label, count in sorted(label_counts.items()):
         print(f"  {label}: {count}")
 
-    data = gesture_recognizer.Dataset.from_folder(
-        dirname=str(dataset_dir),
-        hparams=gesture_recognizer.HandDataPreprocessingParams(
-            shuffle=True,
-            min_detection_confidence=0.7,
-        ),
-    )
+    with tempfile.TemporaryDirectory(prefix="gesture-dataset-upright-") as upright_dir:
+        rotated = copy_upright_dataset(dataset_dir, Path(upright_dir))
+        if rotated:
+            print(f"Rotated {rotated} images upright using their EXIF orientation.")
+        data = gesture_recognizer.Dataset.from_folder(
+            dirname=upright_dir,
+            hparams=gesture_recognizer.HandDataPreprocessingParams(
+                shuffle=True,
+                min_detection_confidence=0.7,
+            ),
+        )
     if data.size < 10:
         raise ValueError(
             f"Only {data.size} images with detected hands remain. "
@@ -291,6 +358,8 @@ def train(dataset_dir: Path, export_dir: Path, epochs: int, batch_size: int) -> 
                 data.label_names,
                 epochs,
                 batch_size,
+                learning_rate,
+                dropout,
             )
             replace_export_dir(staged_dir, export_dir)
         print("Replaced the previous model with the updated all-class model.")
@@ -304,6 +373,8 @@ def train(dataset_dir: Path, export_dir: Path, epochs: int, batch_size: int) -> 
             data.label_names,
             epochs,
             batch_size,
+            learning_rate,
+            dropout,
         )
 
     model_path = export_dir / "gesture_recognizer.task"
@@ -329,6 +400,8 @@ def main() -> None:
         export_dir=export_dir,
         epochs=args.epochs,
         batch_size=args.batch_size,
+        learning_rate=args.learning_rate,
+        dropout=args.dropout,
     )
 
 

@@ -5,13 +5,16 @@ hand drawing) are shared by the iterations in trash_talk.py and
 music_control.py.
 """
 
+import os
 import time
 from pathlib import Path
 
 import cv2
 import mediapipe as mp
+import numpy as np
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+from PIL import Image, ImageDraw, ImageFont
 
 
 MODEL_PATH = (
@@ -21,6 +24,14 @@ MODEL_PATH = (
     / "gesture_recognizer.task"
 )
 WINDOW_NAME = "Image"
+
+# Clean sans-serif fonts for on-screen text, tried in order. OpenCV's own
+# Hershey fonts look hand-drawn, so text is drawn with Pillow instead.
+FONT_FILES = {
+    False: ["segoeui.ttf", "arial.ttf", "DejaVuSans.ttf"],
+    True: ["segoeuib.ttf", "arialbd.ttf", "DejaVuSans-Bold.ttf"],
+}
+_font_cache = {}
 
 
 def create_recognizer(model_path=MODEL_PATH, num_hands=2):
@@ -119,6 +130,55 @@ def hand_label(results, hand_index):
     if hand_index < len(results.handedness) and results.handedness[hand_index]:
         return results.handedness[hand_index][0].category_name
     return "Hand"
+
+
+def _font(size, bold):
+    key = (size, bold)
+    if key not in _font_cache:
+        fonts_dir = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
+        font = None
+        for name in FONT_FILES[bold]:
+            for candidate in (fonts_dir / name, name):
+                try:
+                    font = ImageFont.truetype(str(candidate), size)
+                    break
+                except OSError:
+                    continue
+            if font is not None:
+                break
+        _font_cache[key] = font or ImageFont.load_default(size=size)
+    return _font_cache[key]
+
+
+def text_size(text, size=18, bold=False):
+    """Return (width, height) of text drawn with draw_text."""
+    left, top, right, bottom = _font(size, bold).getbbox(text)
+    return right - left, bottom - top
+
+
+def draw_text(img, text, org, size=18, color=(0, 0, 0), bold=False,
+              background=None, padding=5):
+    """Draw text with its top-left corner at org.
+
+    Colors are BGR. With background, a filled box is drawn behind the text.
+    Only the small area around the text is converted for Pillow, so this is
+    cheap enough to call several times per frame.
+    """
+    font = _font(size, bold)
+    left, top, right, bottom = font.getbbox(text)
+    x, y = org[0] - left, org[1] - top
+    img_h, img_w = img.shape[:2]
+    x0, y0 = max(org[0] - padding, 0), max(org[1] - padding, 0)
+    x1 = min(org[0] + right - left + padding, img_w)
+    y1 = min(org[1] + bottom - top + padding, img_h)
+    if x0 >= x1 or y0 >= y1:
+        return
+
+    if background is not None:
+        cv2.rectangle(img, (x0, y0), (x1 - 1, y1 - 1), background, -1)
+    patch = Image.fromarray(np.ascontiguousarray(img[y0:y1, x0:x1, ::-1]))
+    ImageDraw.Draw(patch).text((x - x0, y - y0), text, font=font, fill=tuple(color[::-1]))
+    img[y0:y1, x0:x1] = np.asarray(patch)[:, :, ::-1]
 
 
 def draw_hand(img, hand_landmarks):
