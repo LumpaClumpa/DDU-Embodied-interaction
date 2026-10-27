@@ -65,9 +65,41 @@ From the repository folder, with the virtual environment active, run:
 The script opens camera 0 through Windows DirectShow and displays hand
 landmarks, fingertip names, and the predicted gesture with its confidence.
 Press q in the camera window to quit. The gesture-recognizer model must be
-present at models\gesture_recognizer.task. Put a downloaded MediaPipe gesture
-recognizer task file there, or copy a trained model into that location.
-main.py delegates the webcam and recognition work to gesture_camera.py.
+present at models\my_custom_gesture\gesture_recognizer.task. main.py
+delegates the webcam and recognition work to gesture_camera.py, which also
+holds the camera helpers shared by the two iterations below.
+
+Iteration 1: friendly trash talk
+--------------------------------
+
+    python trash_talk.py
+
+Hold a recognized gesture for about half a second and a trash-talk message
+for it is printed to the console and shown in a banner on screen. A ring
+around the wrist shows how long the gesture has been held. Players are named
+"Left player" and "Right player" after the side of the screen their hand is
+on. Edit the MESSAGES dictionary in trash_talk.py to change the lines.
+
+Iteration 2: music control with visuals
+---------------------------------------
+
+Start music in any player (Spotify, a browser, ...), then run:
+
+    python music_control.py
+
+- Hold a closed fist: play / pause
+- Swipe your hand quickly right / left: next / previous track
+- Pinch thumb and index finger, then move up / down: volume up / down
+
+This iteration reads the hand landmarks directly (finger positions and hand
+movement), so it does not depend on the custom gesture classes. The commands
+are sent as Windows media keys. On screen you see a fingertip
+trail, a volume slider while pinching, an icon for each action, and
+decorative equalizer bars that react to your hand movement. Add --dry-run to
+see the actions without sending media keys.
+
+Both iterations take --model to use another gesture_recognizer.task file,
+for example models\test_model\gesture_recognizer.task.
 
 Train a gesture-recognition model
 ---------------------------------
