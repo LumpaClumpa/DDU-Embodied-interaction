@@ -19,3 +19,6 @@ models/.*-backup-*/
 
 # Photos taken out of the dataset
 data/removed_samples/
+
+sounds
+palm_sound.py
