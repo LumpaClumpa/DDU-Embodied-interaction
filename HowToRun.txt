@@ -1,196 +1,96 @@
-DDU Embodied Interaction - installation and run guide
-=====================================================
+DDU Embodied Interaction - how to run
+=====================================
 
-Prerequisites
--------------
+Setup
+-----
 
-- Windows 10 or 11
-- Python 3.10 (the pinned TensorFlow and MediaPipe Model Maker dependencies
-  were tested with Python 3.10)
-- A webcam for the live hand-landmark demo
+Needs Windows 10/11, Git, a webcam, and Python 3.12 + 3.10 from python.org.
+In PowerShell:
 
-Open PowerShell in the repository folder before running the commands below.
+    git clone https://github.com/LumpaClumpa/DDU-Embodied-interaction.git
+    cd DDU-Embodied-interaction
+    .\setup.ps1                 # add -SkipTraining to skip the 3.10 env
 
-Create and install the environment
-----------------------------------
+This creates two environments:
 
-Create a virtual environment using Python 3.10:
+    .venv              Python 3.12, camera apps     (requirements-app.txt)
+    .venv-mediapipe    Python 3.10, model training  (requirements.txt)
 
-    py -3.10 -m venv .venv
+Activate the one you need:
+
     .\.venv\Scripts\Activate.ps1
+    .\.venv-mediapipe\Scripts\Activate.ps1
 
-If PowerShell blocks activation, either allow it for this PowerShell process:
+If PowerShell blocks scripts, allow them for this window only:
 
     Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-    .\.venv\Scripts\Activate.ps1
 
-Then install the dependencies in this order. The PyYAML bootstrap is needed
-because the pinned PyYAML release uses a legacy source build:
+Apps (in .venv)
+---------------
 
-    python -m pip install --upgrade pip
+Press q in the camera window to quit. All apps use
+models\my_custom_gesture\gesture_recognizer.task; pass --model to use another.
+
+python main.py
+    Shows hand landmarks and the recognized gesture.
+
+python trash_talk.py
+    Hold a gesture briefly to get a trash-talk message on screen. Players are
+    "Left" and "Right" by screen side. Edit MESSAGES in trash_talk.py.
+
+python music_control.py   (start music in any player first)
+    Hold a closed fist        play / pause
+    Swipe open hand           next / previous track (fast, sideways, smooth;
+                              the meter at the top turns green when it counts)
+    Pinch + move up / down    volume
+    Frame with both hands     open / resize / close the visualizer: make an
+                              "L" with thumb and index of each hand, drag
+                              apart, relax to place; a small frame closes it
+    The visualizer shows song title, artist, cover art and audio bars.
+    Controls only react with one hand in view. Add --dry-run to test without
+    sending media keys. Tune the SWIPE_* constants at the top of the file.
+
+    Optional trained gestures (dataset folder names must match):
+        palm_stop      pause
+        point_right    next track      (as seen in the mirrored window)
+        point_left     previous track
+        thumb_down     mute / unmute
+        rock_horns     rock mode colours
+        shaka          skip 2-5 tracks
+
+Training (in .venv-mediapipe)
+-----------------------------
+
+Put images in one folder per label under data\gesture_dataset\. A "none"
+folder is required. Then:
+
+    python training_models.py --export-dir models\my_custom_gesture
+
+- Defaults: 100 epochs, batch 32, learning rate 0.002, dropout 0.4
+  (change with --epochs, --batch-size, --learning-rate, --dropout).
+- Sideways phone photos are rotated upright automatically; originals are
+  not changed.
+- Adding a class: add its folder and rerun with the same --export-dir. The
+  old model is only replaced if training succeeds. Removing or renaming a
+  class needs a new --export-dir.
+- --sample-data trains on the Rock-Paper-Scissors example dataset.
+
+Manual training setup (setup.ps1 does this; order matters):
+
+    py -3.10 -m venv .venv-mediapipe
+    .\.venv-mediapipe\Scripts\Activate.ps1
     python -m pip install "Cython<3" "setuptools<81" wheel
     python -m pip install --no-build-isolation "PyYAML==5.4.1"
     python -m pip install -r requirements.txt
     python -m pip install --no-deps "protobuf==3.20.3"
 
-The final Protobuf pin is required by MediaPipe 0.10.5. TensorFlow 2.10.1's
-package metadata rejects Protobuf 3.20.3, so it must be installed after the
-requirements file and without dependency resolution.
-
-Libraries
----------
-
-The versions below are pinned in requirements.txt:
-
-- mediapipe 0.10.5: hand landmark detection and MediaPipe Tasks APIs.
-- opencv-contrib-python 4.11.0.86: webcam capture, image handling, and display.
-- mediapipe-model-maker 0.1.0: training a custom gesture recognizer.
-- tensorflow 2.10.1, tensorflow-text 2.10.0, tensorflow-addons 0.18.0,
-  tf-models-official 2.10.1, tensorflow-datasets 4.8.3, and tensorflow-hub
-  0.16.1: the TensorFlow and model-training dependencies used by Model Maker.
-- numpy 1.23.5: numerical arrays used by the vision and ML libraries.
-- matplotlib 3.10.9: plotting support used by the ML dependencies.
-- setuptools<81: packaging compatibility for the pinned dependencies.
-
-The installation commands also install build tools Cython<3 and wheel, PyYAML
-5.4.1, and the Protobuf 3.20.3 runtime as described above.
-
-Run the live webcam demo
-------------------------
-
-From the repository folder, with the virtual environment active, run:
-
-    python main.py
-
-The script opens camera 0 through Windows DirectShow and displays hand
-landmarks, fingertip names, and the predicted gesture with its confidence.
-Press q in the camera window to quit. The gesture-recognizer model must be
-present at models\my_custom_gesture\gesture_recognizer.task. main.py
-delegates the webcam and recognition work to gesture_camera.py, which also
-holds the camera helpers shared by the two iterations below.
-
-Iteration 1: friendly trash talk
---------------------------------
-
-    python trash_talk.py
-
-Hold a recognized gesture for about half a second and a trash-talk message
-for it is printed to the console and shown in a banner on screen. A ring
-around the wrist shows how long the gesture has been held. Players are named
-"Left player" and "Right player" after the side of the screen their hand is
-on. Edit the MESSAGES dictionary in trash_talk.py to change the lines.
-
-Iteration 2: music control with visuals
----------------------------------------
-
-The visualizer needs three extra packages in the camera environment: one
-captures the sound your speakers play, the others read the song title, artist
-and cover art from Windows. Install them once:
-
-    python -m pip install soundcard winrt-runtime winrt-Windows.Media.Control winrt-Windows.Storage.Streams winrt-Windows.Foundation winrt-Windows.Foundation.Collections
-
-Without them the controls still work; the visualizer then shows what is
-missing.
-
-Start music in any player (Spotify, a browser, ...), then run:
-
-    python music_control.py
-
-- Hold a closed fist: play / pause
-- Swipe your open hand quickly right / left: next / previous track
-  The swipe must be fast, mostly sideways and in one smooth movement. Show
-  your open hand for a moment before swiping; bringing the hand back after a
-  swipe does not count. The bar at the top fills as you move and turns
-  green when the movement is good enough to count. The thresholds are the
-  SWIPE_* constants at the top of music_control.py.
-- Pinch thumb and index finger, then move up / down: volume up / down
-- Frame with both hands to open the visualizer: make an "L" with thumb and
-  index finger of each hand (like framing a photo), hold it briefly, and drag
-  the hands apart to size the frame. Relax your hands to place it there. Do
-  it again to move or resize it; a small frame (red corners) closes it. The
-  visualizer shows the song title, artist and cover art, and bars of the
-  sound that is playing.
-
-The controls only react while one hand is in view. These controls read the hand landmarks directly (finger positions and
-hand movement), so they work without any custom gesture classes.
-
-Trained gestures add more controls. Make a dataset folder with exactly these
-names, collect photos, and retrain; gestures the model does not know are
-ignored:
-
-    data\gesture_dataset\palm_stop\     open palm facing the camera: pause
-    data\gesture_dataset\point_right\   index finger pointing right: next track
-    data\gesture_dataset\point_left\    index finger pointing left: previous track
-    data\gesture_dataset\thumb_down\    thumbs down: mute / unmute
-    data\gesture_dataset\rock_horns\    index and pinky up: rock mode colours
-    data\gesture_dataset\shaka\         thumb and pinky out: shuffle jump
-
-"Right" and "left" mean as seen in the mirrored camera window. Take the
-pointing photos so that they match what the window shows; a phone's selfie
-photo is usually saved unmirrored, which swaps the two directions.
-
-The commands are sent as Windows media keys, and each one is printed in the
-console. On screen there is only the swipe meter, plus the visualizer while
-it is open. Add --dry-run to see the actions without sending media keys.
-
-Both iterations take --model to use another gesture_recognizer.task file,
-for example models\test_model\gesture_recognizer.task.
-
-Train a gesture-recognition model
----------------------------------
-
-To train using your own images, arrange them in one subfolder per label. The
-dataset must include a "none" folder for images that do not belong to one of
-the custom gestures:
-
-    data\gesture_dataset\
-        none\
-        thumbs_up\
-        peace\
-
-Put supported image files (.bmp, .jpeg, .jpg, .png, or .webp) in each label
-folder, then run:
-
-    python training_models.py --dataset data\gesture_dataset
-
-The defaults (100 epochs, batch size 32, learning rate 0.002, dropout 0.4)
-were tuned on this dataset; change them with --epochs, --batch-size,
---learning-rate and --dropout. Images stored sideways with EXIF rotation
-(typical for phone photos) are rotated upright in a temporary copy before
-training; the original files are not changed.
-
-At least two labels, including "none", are required, and at least 10 images
-with detected hands must remain after preprocessing. The script splits the
-images into training, validation, and test sets and writes the trained model
-under models\gesture_dataset_gesture_recognizer\ by default. To choose a
-different output directory, add, for example:
-
-    --export-dir models\my_gesture_model
-
-To add a gesture class to a model you've already trained, keep the existing
-class folders and images in the dataset, add a folder for the new class, and
-rerun training with the same --export-dir (if you used one). The script detects
-the added class and retrains the classifier using images from all current
-classes; it does not train only on the new class. The new model is trained in a
-temporary directory and replaces the old export only after training succeeds.
-Removing or renaming existing classes still requires choosing a new
---export-dir manually.
-
-The example Rock-Paper-Scissors dataset can be downloaded and trained
-automatically (an internet connection is needed the first time):
-
-    python training_models.py --sample-data
-
-The trained gesture-recognizer model is separate from the hand-landmarker
-model. To run a trained model in main.py, copy its
-gesture_recognizer.task to models\gesture_recognizer.task, replacing the
-downloaded model.
-
 Troubleshooting
 ---------------
 
-- If the camera does not open, check that it is connected and not being used
-  by another application. The script currently selects camera index 0.
-- If a package installation fails, check that the active interpreter is
-  Python 3.10 and repeat the installation commands in the stated order.
-- To leave the virtual environment, run: deactivate
+- Camera does not open: check it is connected and not used by another app
+  (camera index 0 is used).
+- Install fails: check the Python version (3.12 for .venv, 3.10 for
+  .venv-mediapipe) and rerun .\setup.ps1.
+- Install fails with "No such file or directory" and a long-path hint: the
+  folder path is too long for Windows. Clone into a short folder (e.g.
+  C:\code) and run .\setup.ps1 again.
