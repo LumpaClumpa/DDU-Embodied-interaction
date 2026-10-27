@@ -10,3 +10,12 @@ __pycache__/
 data/rps_data_sample/
 data/rps_data_sample.zip
 models/*_gesture_recognizer/
+# Training checkpoints and logs (only the exported .task file is needed)
+models/*/epoch_models/
+models/*/logs/
+models/*/checkpoint
+models/*/best_model_weights.*
+models/.*-backup-*/
+
+# Photos taken out of the dataset
+data/removed_samples/

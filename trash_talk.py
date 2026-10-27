@@ -7,7 +7,7 @@ people can trash talk each other in front of one camera.
 
 Run:
     python trash_talk.py
-    python trash_talk.py --model models\\test_model\\gesture_recognizer.task
+    python trash_talk.py --model models\\other_model\\gesture_recognizer.task
 """
 
 import argparse
