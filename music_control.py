@@ -57,8 +57,6 @@ TRAINED_GESTURES = {
     "palm_stop",
     "point_left",
     "point_right",
-    "rock_horns",
-    "shaka",
     "thumb_down",
 }
 

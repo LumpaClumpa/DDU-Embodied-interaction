@@ -57,10 +57,11 @@ def open_camera(index=0, width=640, height=480):
     return cap
 
 
-def camera_frames(cap, recognizer, window_size=(480, 360)):
+def camera_frames(cap, recognizer, window_size=(480, 360), on_key=None):
     """Yield (mirrored BGR frame, recognizer results) until q is pressed.
 
     The caller draws on the frame; it is shown when the next frame is requested.
+    Any other key pressed in the window is passed to on_key as a character.
     """
     cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(WINDOW_NAME, *window_size)
@@ -91,8 +92,11 @@ def camera_frames(cap, recognizer, window_size=(480, 360)):
         yield img, results
 
         cv2.imshow(WINDOW_NAME, img)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("q"):
             return
+        if key != 0xFF and on_key is not None:
+            on_key(chr(key))
 
 
 def run_camera_app(
@@ -100,8 +104,12 @@ def run_camera_app(
     model_path=MODEL_PATH,
     window_size=(480, 360),
     num_hands=2,
+    on_key=None,
 ):
-    """Open the camera and call handle_frame(img, results) for every frame."""
+    """Open the camera and call handle_frame(img, results) for every frame.
+
+    on_key(char) is called for keys pressed in the window (q always quits).
+    """
     cap = open_camera()
     try:
         if not cap.isOpened():
@@ -109,7 +117,7 @@ def run_camera_app(
             return
 
         with create_recognizer(model_path, num_hands) as recognizer:
-            for img, results in camera_frames(cap, recognizer, window_size):
+            for img, results in camera_frames(cap, recognizer, window_size, on_key):
                 handle_frame(img, results)
     except KeyboardInterrupt:
         print("Stopped by user")

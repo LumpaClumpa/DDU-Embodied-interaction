@@ -58,6 +58,12 @@ python music_control.py   (start music in any player first)
         rock_horns     rock mode colours
         shaka          skip 2-5 tracks
 
+python music_tutorial.py
+    Learn the music_control gestures as a game: one level per move, tips
+    after wrong moves, and a timed final challenge rated with 1-3 stars.
+    Keys: n skip, b back, r restart level. Media keys are only sent with
+    --live; --level N starts at level N.
+
 Training (in .venv-mediapipe)
 -----------------------------
 
